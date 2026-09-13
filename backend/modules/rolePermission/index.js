@@ -1,0 +1,1 @@
+export { default as RolePermissions } from "./rolePermission.modal.js";

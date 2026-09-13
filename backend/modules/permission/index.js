@@ -1,0 +1,1 @@
+export { default as Permissions } from "./permission.modal.js";
