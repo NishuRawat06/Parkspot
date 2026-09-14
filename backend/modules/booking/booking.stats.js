@@ -39,7 +39,7 @@ export const bookingStats = async (req, res) => {
       raw: true,
     });
     const stays = await booking_modal.findAll({
-      attributes: ["entry", "exit", "base_price", "status"],
+      attributes: ["entry", "exit", "expected_exit", "base_price", "status", "vehicle_type", "user_name", "email", "vehicle_number"],
       raw: true,
     });
 
@@ -103,6 +103,7 @@ export const bookingReport = async (req, res) => {
         "vehicle_type",
         "entry",
         "exit",
+        "expected_exit",
         "base_price",
         "status",
       ],
