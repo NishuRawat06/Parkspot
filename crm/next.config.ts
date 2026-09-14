@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/backend/:path*",
-        destination: "http://localhost:30005/:path*",
+        destination: "https://parkspot-67fo.onrender.com/:path*",
       },
     ];
   },
