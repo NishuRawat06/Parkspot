@@ -1,10 +1,5 @@
 import { billedEndMs } from "./booking.revenue.js";
 
-/**
- * Shape raw aggregates into API responses.
- * Keeps booking.stats.js focused on fetching.
- */
-
 export const roundByDay = (byDay) =>
   byDay.map((d) => ({
     ...d,
@@ -23,13 +18,10 @@ export function bucketByDuration(stays) {
   };
 
   for (const stay of stays) {
-    if (String(stay.status).toLowerCase() === "abandoned") continue;
-    const entry = new Date(stay.entry).getTime();
-    const exitRaw = stay.exit ? new Date(stay.exit).getTime() : NaN;
-    if (Number.isNaN(entry) || Number.isNaN(exitRaw) || exitRaw <= entry)
-      continue;
+    const billed = billedEndMs(stay, Date.now());
+    if (!billed || billed.billedEnd <= billed.entry) continue;
 
-    const hours = (exitRaw - entry) / 3600000;
+    const hours = (billed.billedEnd - billed.entry) / 3600000;
     if (hours < 1) buckets["under 1h"] += 1;
     else if (hours < 4) buckets["1-4h"] += 1;
     else if (hours < 12) buckets["4-12h"] += 1;
@@ -46,7 +38,6 @@ function daysPresentByVehicle(stays, windows, endMs, nowMs) {
   for (let i = 0; i < windows.length; i++) {
     const seen = new Set();
     for (const stay of stays) {
-      if (String(stay.status).toLowerCase() === "abandoned") continue;
       const billed = billedEndMs(stay, Math.min(nowMs, endMs));
       if (!billed || billed.billedEnd <= billed.entry) continue;
       if (billed.entry < endMs && billed.billedEnd > windows[i][0]) {
