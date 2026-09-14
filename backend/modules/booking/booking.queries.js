@@ -1,11 +1,6 @@
 import { Op } from "sequelize";
 import booking_modal from "./booking.modal.js";
 
-/**
- * DB helpers shared by booking controllers.
- * Keeps query-building out of request handlers.
- */
-
 export async function markAbandonedBookings() {
   try {
     const parked = await booking_modal.findAll({
@@ -52,8 +47,17 @@ export function filterStaysInRange(allStays, startMs, endMs, nowMs) {
     const entryMs = new Date(s.entry).getTime();
     if (Number.isNaN(entryMs)) return false;
     const exitMs = s.exit ? new Date(s.exit).getTime() : NaN;
-    const billedEnd =
-      !Number.isNaN(exitMs) && exitMs > entryMs ? exitMs : nowMs;
+    const expectedMs = s.expected_exit
+      ? new Date(s.expected_exit).getTime()
+      : NaN;
+    const status = String(s.status || "").toLowerCase();
+
+    let billedEnd;
+    if (!Number.isNaN(exitMs) && exitMs > entryMs) billedEnd = exitMs;
+    else if (status === "parked") billedEnd = nowMs;
+    else if (!Number.isNaN(expectedMs) && expectedMs > entryMs)
+      billedEnd = expectedMs;
+    else return entryMs < endMs && entryMs >= startMs;
     return entryMs < endMs && billedEnd > startMs;
   });
 }
