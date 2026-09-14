@@ -30,12 +30,11 @@ export function billedEndMs(stay, nowMs) {
   const status = String(stay.status || "").toLowerCase();
   const isActive = status === "parked";
 
-  // Real exit always wins — this keeps exited bookings in history.
+
   if (!Number.isNaN(exitRaw) && exitRaw > entry)
     return { entry, billedEnd: exitRaw, isActive, exitRaw };
   if (isActive) return { entry, billedEnd: nowMs, isActive, exitRaw };
-  // Abandoned / exited-without-exit: bill until expected_exit so the
-  // stay still shows up in graphs instead of vanishing to zero.
+
   if (!Number.isNaN(expectedRaw) && expectedRaw > entry)
     return { entry, billedEnd: expectedRaw, isActive, exitRaw };
   return { entry, billedEnd: entry, isActive, exitRaw };
