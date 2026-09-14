@@ -1,8 +1,3 @@
-/**
- * Revenue + occupancy math for stats and reports.
- * Pure functions — no DB access, easy to unit-test.
- */
-
 export const buildDayWindows = (rangeStartMs, rangeEndMs) => {
   const windows = [];
   const cursor = new Date(rangeStartMs);
@@ -29,11 +24,20 @@ export function billedEndMs(stay, nowMs) {
   if (Number.isNaN(entry)) return null;
 
   const exitRaw = stay.exit ? new Date(stay.exit).getTime() : NaN;
-  const isActive = String(stay.status || "").toLowerCase() === "parked";
+  const expectedRaw = stay.expected_exit
+    ? new Date(stay.expected_exit).getTime()
+    : NaN;
+  const status = String(stay.status || "").toLowerCase();
+  const isActive = status === "parked";
 
+  // Real exit always wins — this keeps exited bookings in history.
   if (!Number.isNaN(exitRaw) && exitRaw > entry)
     return { entry, billedEnd: exitRaw, isActive, exitRaw };
   if (isActive) return { entry, billedEnd: nowMs, isActive, exitRaw };
+  // Abandoned / exited-without-exit: bill until expected_exit so the
+  // stay still shows up in graphs instead of vanishing to zero.
+  if (!Number.isNaN(expectedRaw) && expectedRaw > entry)
+    return { entry, billedEnd: expectedRaw, isActive, exitRaw };
   return { entry, billedEnd: entry, isActive, exitRaw };
 }
 
@@ -65,36 +69,24 @@ export const accrueRevenue = (stays, windows, nowMs) => {
   for (const stay of stays) {
     const status = String(stay.status || "").toLowerCase();
     byStatus.set(status, (byStatus.get(status) || 0) + 1);
-    if (status === "abandoned") continue;
 
     const billed = billedEndMs(stay, cappedNow);
-    if (!billed || billed.billedEnd <= billed.entry) continue;
+    if (!billed) continue;
 
     const { entry, billedEnd, isActive, exitRaw } = billed;
     const ratePerHour = Number(stay.base_price) || 0;
-    const parkedHours = (billedEnd - entry) / 3600000;
-    const bookingRevenue = parkedHours * ratePerHour;
-
-    if (isActive && Number.isNaN(exitRaw)) {
-      totals.liveRevenue += bookingRevenue;
-      totals.activeCount += 1;
-    }
 
     const entryIndex = Math.floor((entry - firstStart) / 86400000);
     if (entryIndex >= 0 && entryIndex < byDay.length)
       byDay[entryIndex].bookings += 1;
 
     totals.bookings += 1;
-    totals.parkedHours += parkedHours;
-    totals.revenue += bookingRevenue;
 
     const vKey = stay.vehicle_type || "unknown";
     if (!byVehicle.has(vKey))
       byVehicle.set(vKey, { revenue: 0, bookings: 0, parkedHours: 0 });
     const vAgg = byVehicle.get(vKey);
-    vAgg.revenue += bookingRevenue;
     vAgg.bookings += 1;
-    vAgg.parkedHours += parkedHours;
 
     const cKey = `${stay.user_name || "Unknown"}|${stay.email || ""}`;
     if (!customerMap.has(cKey)) {
@@ -108,8 +100,25 @@ export const accrueRevenue = (stays, windows, nowMs) => {
       });
     }
     const cAgg = customerMap.get(cKey);
-    cAgg.revenue += bookingRevenue;
     cAgg.bookings += 1;
+
+    if (billed.billedEnd <= billed.entry) continue;
+
+    const parkedHours = (billedEnd - entry) / 3600000;
+    const bookingRevenue = parkedHours * ratePerHour;
+
+    if (isActive && Number.isNaN(exitRaw)) {
+      totals.liveRevenue += bookingRevenue;
+      totals.activeCount += 1;
+    }
+
+    totals.parkedHours += parkedHours;
+    totals.revenue += bookingRevenue;
+
+    vAgg.revenue += bookingRevenue;
+    vAgg.parkedHours += parkedHours;
+
+    cAgg.revenue += bookingRevenue;
     cAgg.parkedHours += parkedHours;
 
     for (let i = 0; i < windows.length; i++) {
